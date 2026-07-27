@@ -1,4 +1,4 @@
-name: Gemini Image Bot
+name: Gemini Multi-File Bot
 
 on:
   issues:
@@ -22,7 +22,7 @@ jobs:
       - name: Install Dependencies
         run: npm install @octokit/action @google/genai
 
-      - name: Run Gemini Image Bot
+      - name: Run Gemini Multi-File Bot
         uses: actions/github-script@v7
         env:
           GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -44,58 +44,71 @@ jobs:
             const issue = await github.rest.issues.get({ owner, repo, issue_number });
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
 
+            // Събираме само предишната история като текстов контекст (без стари снимки/файлове), 
+            // за да знае ботът за какво си говорим, но да не се претоварва.
             const contents = [];
-
-            // Добавяме първото съобщение като потребител
+            
             contents.push({ 
               role: "user", 
               parts: [{ text: `Контекст: заглавието на чата е "${issue.data.title}". Първо съобщение: ${issue.data.body || "Здравей"}` }] 
             });
 
-            // Обхождаме коментарите
+            // Добавяме предишните коментари само като текст
             for (const comment of comments.data) {
+              // Прескачаме последното (текущо) съобщение, защото ще го обработим отделно с файловете му
+              if (comment.id === context.payload.comment?.id) continue;
+              
               const role = comment.user.type === 'Bot' ? 'model' : 'user';
-              const commentParts = [{ text: comment.body || "" }];
+              contents.push({ role: role, parts: [{ text: comment.body || "" }] });
+            }
 
-              // Търсим линкове към качени в GitHub картинки
-              const imageUrls = comment.body.match(/https:\/\/(?:github\.com\/user-attachments\/assets\/|[a-zA-Z0-9-]+\.githubusercontent\.com\/[^\s)]+)/g);
+            // Сега взимаме НАЙ-НОВОТО съобщение (това, което току-що е задействало екшъна)
+            const latestBody = context.payload.comment ? context.payload.comment.body : (issue.data.body || "");
+            const latestParts = [{ text: latestBody }];
 
-              if (imageUrls && role === 'user') {
-                for (const imgUrl of imageUrls) {
-                  try {
-                    // Изтегляме картинката, използвайки GitHub токена за достъп до Private репозиторито
-                    const imgResponse = await fetch(imgUrl, {
-                      headers: {
-                        'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`
-                      }
-                    });
-                    
-                    if (!imgResponse.ok) throw new Error(`HTTP error! status: ${imgResponse.status}`);
-                    
-                    const imgBuffer = await imgResponse.arrayBuffer();
-                    const base64Data = Buffer.from(imgBuffer).toString('base64');
-                    
-                    commentParts.push({
-                      inlineData: {
-                        data: base64Data,
-                        mimeType: "image/jpeg"
-                      }
-                    });
-                  } catch (imgErr) {
-                    console.error("Неуспешно изтегляне на снимка през Private линк:", imgErr);
-                  }
+            // Търсим ВСИЧКИ линкове към файлове/снимки в това последно съобщение
+            // Поддържаме както картинки, така и документи (.pdf, .txt и др., ако GitHub ги е качил)
+            const fileUrls = latestBody.match(/https:\/\/(?:github\.com\/user-attachments\/assets\/|[a-zA-Z0-9-]+\.githubusercontent\.com\/[^\s)]+)/g);
+
+            if (fileUrls) {
+              console.log(`Открити файлове/снимки в текущото съобщение: ${fileUrls.length}`);
+              for (const fileUrl of fileUrls) {
+                try {
+                  const fileResponse = await fetch(fileUrl, {
+                    headers: {
+                      'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`
+                    }
+                  });
+                  
+                  if (!fileResponse.ok) throw new Error(`HTTP error! status: ${fileResponse.status}`);
+                  
+                  const fileBuffer = await fileResponse.arrayBuffer();
+                  const base64Data = Buffer.from(fileBuffer).toString('base64');
+                  
+                  // Определяме типа на файла по разширението в линка или го приемаме универсално
+                  let mimeType = "image/jpeg"; // по подразбиране
+                  if (fileUrl.endsWith('.png')) mimeType = "image/png";
+                  else if (fileUrl.endsWith('.webp')) mimeType = "image/webp";
+                  else if (fileUrl.endsWith('.pdf')) mimeType = "application/pdf";
+                  else if (fileUrl.endsWith('.txt')) mimeType = "text/plain";
+
+                  latestParts.push({
+                    inlineData: {
+                      data: base64Data,
+                      mimeType: mimeType
+                    }
+                  });
+                } catch (fileErr) {
+                  console.error("Неуспешно изтегляне на файл:", fileErr);
                 }
               }
-
-              contents.push({ role: role, parts: commentParts });
             }
 
-            // ЗАДЪЛЖИТЕЛНА ПРОВЕРКА: Google изисква последното съобщение винаги да е от потребителя (user)
-            if (contents.length > 0 && contents[contents.length - 1].role === 'model') {
-              contents.push({ role: 'user', parts: [{ text: "Моля, отговори на последното ми съобщение." }] });
-            }
+            // Добавяме най-новото съобщение с всички негови прикрепени файлове към опашката
+            contents.push({ role: 'user', parts: latestParts });
 
             try {
+              // Използваме актуалния модел
               const response = await ai.models.generateContent({
                 model: 'gemini-3.5-flash-lite',
                 contents: contents,
@@ -110,6 +123,6 @@ jobs:
                 body: botResponse
               });
             } catch (error) {
-              console.error("Грешка при комуникация с Gemini (Снимки):", error);
+              console.error("Грешка при комуникация с Gemini (Множество файлове):", error);
               throw error;
             }
