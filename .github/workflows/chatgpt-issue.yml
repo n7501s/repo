@@ -1,0 +1,74 @@
+name: ChatGPT Issue Bot
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  chat:
+    # Задейства се само ако Issue/коментарът не е създаден от самия бот
+    if: github.event.sender.type != 'Bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install @octokit/action @google/generative-ai openai
+
+      - name: Run ChatGPT Bot
+        uses: actions/github-script@v7
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          script: |
+            const { OpenAI } = require('openai');
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+
+            // 1. Вземане на заглавието и основния текст на Issue-то
+            const issue = await github.rest.issues.get({ owner, repo, issue_number });
+            
+            // 2. Вземане на всички коментари до момента
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
+
+            // 3. Форматиране на историята за ChatGPT
+            const messages = [
+              { role: "system", content: `Ти си полезен асистент. Водиш разговор в GitHub Issue със заглавие: "${issue.data.title}".` },
+              { role: "user", content: issue.data.body || "Здравей" }
+            ];
+
+            for (const comment of comments.data) {
+              const role = comment.user.type === 'Bot' ? 'assistant' : 'user';
+              messages.push({ role: role, content: comment.body });
+            }
+
+            // 4. Извикване на OpenAI API (използваме модела gpt-4o-mini като бърз и евтин)
+            try {
+              const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: messages,
+              });
+
+              const botResponse = completion.choices[0].message.content;
+
+              // 5. Публикуване на отговора като коментар в Issue-то
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: botResponse
+              });
+            } catch (error) {
+              console.error("Грешка при комуникация с OpenAI:", error);
+            }
