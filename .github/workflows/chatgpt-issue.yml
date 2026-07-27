@@ -19,8 +19,9 @@ jobs:
         with:
           node-version: '24'
 
+      # Инсталираме официалния нов пакет на Google за GenAI
       - name: Install Dependencies
-        run: npm install @octokit/action @google/generative-ai
+        run: npm install @octokit/action @google/genai
 
       - name: Run Gemini Bot
         uses: actions/github-script@v7
@@ -28,9 +29,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           script: |
-            // Коректен импорт за новата версия на библиотеката на Google
-            const { GoogleGenAI } = require('@google/generative-ai');
-            const ai = new GoogleGenAI(); // Инициализация без аргументи (автоматично търси GEMINI_API_KEY в env)
+            // Използваме модерния и правилен импорт за новия SDK
+            const { GoogleGenAI } = require('@google/genai');
+            
+            if (!process.env.GEMINI_API_KEY) {
+              throw new Error("Грешка: Не е намерен GEMINI_API_KEY в GitHub Secrets!");
+            }
+            
+            // Инициализираме клиента, подавайки му ключа изрично
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -39,8 +46,9 @@ jobs:
             const issue = await github.rest.issues.get({ owner, repo, issue_number });
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
 
+            // Подготвяме хронологията на чата в съответствие с изискванията на Gemini
             const contents = [
-              { role: "user", parts: [{ text: `Контекст: заглавието на чата е "${issue.data.title}". Първо съобщение: ${issue.data.body || "Здравей"}` }] }
+              { role: "user", parts: [{ text: `Контекст на разговора: заглавието на това Issue е "${issue.data.title}". Първоначално запитване: ${issue.data.body || "Здравей"}` }] }
             ];
 
             for (const comment of comments.data) {
@@ -49,6 +57,7 @@ jobs:
             }
 
             try {
+              // Генерираме съдържание чрез най-бързия безплатен модел gemini-2.5-flash
               const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: contents,
@@ -56,6 +65,7 @@ jobs:
 
               const botResponse = response.text;
 
+              // Изпращаме генерирания отговор обратно в коментарите на Issue-то
               await github.rest.issues.createComment({
                 owner,
                 repo,
