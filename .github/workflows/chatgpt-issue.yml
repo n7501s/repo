@@ -8,7 +8,6 @@ on:
 
 jobs:
   chat:
-    # Задейства се само ако Issue/коментарът не е създаден от самия бот
     if: github.event.sender.type != 'Bot'
     runs-on: ubuntu-latest
     steps:
@@ -18,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-node-version: '20'
+          node-version: '24' # Обновено към Node 24, за да няма предупреждения
 
       - name: Install Dependencies
         run: npm install @octokit/action @google/generative-ai openai
@@ -26,23 +25,27 @@ jobs:
       - name: Run ChatGPT Bot
         uses: actions/github-script@v7
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Уверете се, че името тук съвпада със записаното в Secrets
         with:
           script: |
             const { OpenAI } = require('openai');
-            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+            
+            // Вземаме ключа от системната среда
+            const apiKey = process.env.OPENAI_API_KEY;
+            
+            if (!apiKey) {
+              throw new Error("Критична грешка: OPENAI_API_KEY не е намерен в GitHub Secrets!");
+            }
+
+            const openai = new OpenAI({ apiKey: apiKey });
             
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const issue_number = context.issue.number;
 
-            // 1. Вземане на заглавието и основния текст на Issue-то
             const issue = await github.rest.issues.get({ owner, repo, issue_number });
-            
-            // 2. Вземане на всички коментари до момента
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
 
-            // 3. Форматиране на историята за ChatGPT
             const messages = [
               { role: "system", content: `Ти си полезен асистент. Водиш разговор в GitHub Issue със заглавие: "${issue.data.title}".` },
               { role: "user", content: issue.data.body || "Здравей" }
@@ -53,16 +56,14 @@ jobs:
               messages.push({ role: role, content: comment.body });
             }
 
-            // 4. Извикване на OpenAI API (използваме модела gpt-4o-mini като бърз и евтин)
             try {
               const completion = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
                 messages: messages,
               });
 
-              const botResponse = completion.choices[0].message.content;
+              const botResponse = completion.choices.message.content;
 
-              // 5. Публикуване на отговора като коментар в Issue-то
               await github.rest.issues.createComment({
                 owner,
                 repo,
@@ -71,4 +72,5 @@ jobs:
               });
             } catch (error) {
               console.error("Грешка при комуникация с OpenAI:", error);
+              throw error;
             }
