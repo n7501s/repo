@@ -25,11 +25,12 @@ jobs:
       - name: Run Gemini Bot
         uses: actions/github-script@v7
         env:
-          GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Използваме същия слот за тайна
+          GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           script: |
+            // Коректен импорт за новата версия на библиотеката на Google
             const { GoogleGenAI } = require('@google/generative-ai');
-            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+            const ai = new GoogleGenAI(); // Инициализация без аргументи (автоматично търси GEMINI_API_KEY в env)
             
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -38,7 +39,6 @@ jobs:
             const issue = await github.rest.issues.get({ owner, repo, issue_number });
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
 
-            // Форматиране на историята за Gemini (използва модел с редуващи се потребител/модел)
             const contents = [
               { role: "user", parts: [{ text: `Контекст: заглавието на чата е "${issue.data.title}". Първо съобщение: ${issue.data.body || "Здравей"}` }] }
             ];
@@ -49,7 +49,6 @@ jobs:
             }
 
             try {
-              // Използваме актуалния безплатен модел gemini-2.5-flash
               const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
                 contents: contents,
