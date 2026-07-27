@@ -1,4 +1,4 @@
-name: ChatGPT Issue Bot
+name: Gemini Issue Bot
 
 on:
   issues:
@@ -17,27 +17,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24' # Обновено към Node 24, за да няма предупреждения
+          node-version: '24'
 
       - name: Install Dependencies
-        run: npm install @octokit/action @google/generative-ai openai
+        run: npm install @octokit/action @google/generative-ai
 
-      - name: Run ChatGPT Bot
+      - name: Run Gemini Bot
         uses: actions/github-script@v7
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Уверете се, че името тук съвпада със записаното в Secrets
+          GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Използваме същия слот за тайна
         with:
           script: |
-            const { OpenAI } = require('openai');
-            
-            // Вземаме ключа от системната среда
-            const apiKey = process.env.OPENAI_API_KEY;
-            
-            if (!apiKey) {
-              throw new Error("Критична грешка: OPENAI_API_KEY не е намерен в GitHub Secrets!");
-            }
-
-            const openai = new OpenAI({ apiKey: apiKey });
+            const { GoogleGenAI } = require('@google/generative-ai');
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
             
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -46,23 +38,24 @@ jobs:
             const issue = await github.rest.issues.get({ owner, repo, issue_number });
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
 
-            const messages = [
-              { role: "system", content: `Ти си полезен асистент. Водиш разговор в GitHub Issue със заглавие: "${issue.data.title}".` },
-              { role: "user", content: issue.data.body || "Здравей" }
+            // Форматиране на историята за Gemini (използва модел с редуващи се потребител/модел)
+            const contents = [
+              { role: "user", parts: [{ text: `Контекст: заглавието на чата е "${issue.data.title}". Първо съобщение: ${issue.data.body || "Здравей"}` }] }
             ];
 
             for (const comment of comments.data) {
-              const role = comment.user.type === 'Bot' ? 'assistant' : 'user';
-              messages.push({ role: role, content: comment.body });
+              const role = comment.user.type === 'Bot' ? 'model' : 'user';
+              contents.push({ role: role, parts: [{ text: comment.body }] });
             }
 
             try {
-              const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: messages,
+              // Използваме актуалния безплатен модел gemini-2.5-flash
+              const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: contents,
               });
 
-              const botResponse = completion.choices.message.content;
+              const botResponse = response.text;
 
               await github.rest.issues.createComment({
                 owner,
@@ -71,6 +64,6 @@ jobs:
                 body: botResponse
               });
             } catch (error) {
-              console.error("Грешка при комуникация с OpenAI:", error);
+              console.error("Грешка при комуникация с Gemini:", error);
               throw error;
             }
