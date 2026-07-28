@@ -204,5 +204,11 @@ def main():
 
         # Връщаме отговора в GitHub
         post_github_comment(repo, issue_number, token, final_output)
+
+    except Exception as e:
+        error_message = f"Възникна грешка в модулната система:\n```\n{str(e)}\n```"
+        print(error_message)
+        post_github_comment(repo, issue_number, token, error_message)
+
 if __name__ == "__main__":
     main()
