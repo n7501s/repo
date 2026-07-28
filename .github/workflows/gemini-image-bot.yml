@@ -22,17 +22,18 @@ jobs:
       - name: Install Dependencies
         run: npm install @octokit/action @google/genai
 
-      - name: Run Gemini Multi-File Bot
+      - name: Run Gemini Bot
         uses: actions/github-script@v7
         env:
           GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const { GoogleGenAI } = require('@google/genai');
+            const fs = require('fs');
+            const path = require('path');
             
             if (!process.env.GEMINI_API_KEY) {
-              throw new Error("Грешка: Не е намерен GEMINI_API_KEY в GitHub Secrets!");
+              throw new Error("Грешка: Не е намерен GEMINI_API_KEY!");
             }
             
             const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -59,29 +60,30 @@ jobs:
             const latestBody = context.payload.comment ? context.payload.comment.body : (issue.data.body || "");
             const latestParts = [{ text: latestBody }];
 
-            // Намираме всички линкове към файлове
+            // Търсим линкове към качени файлове в текста
             const fileUrls = latestBody.match(/https:\/\/(?:github\.com\/user-attachments\/assets\/|[a-zA-Z0-9-]+\.githubusercontent\.com\/[^\s)]+)/g);
 
             let debugLog = "\n\n--- [ДЕБЪГ ЛОГ] ---\n";
 
             if (fileUrls) {
-              debugLog += `Намерени линкове в съобщението: ${fileUrls.length}\n`;
-              let index = 1;
+              debugLog += `Намерени линкове: ${fileUrls.length}\n`;
+              // Тъй като GitHub качва файловете в коментарите, нека опитаме директен fetch с правилния USER-AGENT
               for (const fileUrl of fileUrls) {
                 try {
-                  debugLog += `[${index}] Изтегляне на: ${fileUrl}\n`;
+                  debugLog += `Теглене на: ${fileUrl}\n`;
                   const fileResponse = await fetch(fileUrl, {
                     headers: {
-                      'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`
-                    }
+                      'User-Agent': 'Mozilla/5.0'
+                    },
+                    redirect: 'follow'
                   });
                   
                   if (!fileResponse.ok) throw new Error(`HTTP error! status: ${fileResponse.status}`);
                   
-                  const fileBuffer = await fileResponse.arrayBuffer();
-                  const base64Data = Buffer.from(fileBuffer).toString('base64');
+                  const arrayBuffer = await fileResponse.arrayBuffer();
+                  const base64Data = Buffer.from(arrayBuffer).toString('base64');
                   
-                  debugLog += `[${index}] Успешно изтеглени байтове: ${fileBuffer.byteLength}\n`;
+                  debugLog += `Успешно! Байтове: ${arrayBuffer.byteLength}\n`;
 
                   let mimeType = "image/jpeg";
                   if (fileUrl.endsWith('.png')) mimeType = "image/png";
@@ -94,14 +96,12 @@ jobs:
                       mimeType: mimeType
                     }
                   });
-                } catch (fileErr) {
-                  debugLog += `[${index}] ГРЕШКА при сваляне: ${fileErr.message}\n`;
-                  console.error("Неуспешно изтегляне на файл:", fileErr);
+                } catch (err) {
+                  debugLog += `ГРЕШКА: ${err.message}\n`;
                 }
-                index++;
               }
             } else {
-              debugLog += "Няма намерени линкове за файлове в това съобщение.\n";
+              debugLog += "Няма линкове.\n";
             }
 
             contents.push({ role: 'user', parts: latestParts });
@@ -112,7 +112,6 @@ jobs:
                 contents: contents,
               });
 
-              // Добавяме и нашия дебаг лог към отговора на бота, за да го видим
               const botResponse = response.text + debugLog;
 
               await github.rest.issues.createComment({
@@ -122,6 +121,6 @@ jobs:
                 body: botResponse
               });
             } catch (error) {
-              console.error("Грешка при комуникация с Gemini:", error);
+              console.error("Грешка:", error);
               throw error;
             }
