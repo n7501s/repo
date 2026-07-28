@@ -23,8 +23,8 @@ jobs:
 
       - name: Run AI Router Script
         env:
-          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # <-- Взимаме от правилната кутийка в Secrets
+          GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # И тук за всеки случай
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
