@@ -26,11 +26,10 @@ jobs:
         uses: actions/github-script@v7
         env:
           GEMINI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
             const { GoogleGenAI } = require('@google/genai');
-            const fs = require('fs');
-            const path = require('path');
             
             if (!process.env.GEMINI_API_KEY) {
               throw new Error("Грешка: Не е намерен GEMINI_API_KEY!");
@@ -60,20 +59,22 @@ jobs:
             const latestBody = context.payload.comment ? context.payload.comment.body : (issue.data.body || "");
             const latestParts = [{ text: latestBody }];
 
-            // Търсим линкове към качени файлове в текста
-            const fileUrls = latestBody.match(/https:\/\/(?:github\.com\/user-attachments\/assets\/|[a-zA-Z0-9-]+\.githubusercontent\.com\/[^\s)]+)/g);
+            // ПОПРАВЕН РЕГУЛЯРЕН ИЗРАЗ: Увлича пълния линк заедно с уникалния UUID код накрая
+            const fileUrls = latestBody.match(/https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+/g);
 
             let debugLog = "\n\n--- [ДЕБЪГ ЛОГ] ---\n";
 
             if (fileUrls) {
-              debugLog += `Намерени линкове: ${fileUrls.length}\n`;
-              // Тъй като GitHub качва файловете в коментарите, нека опитаме директен fetch с правилния USER-AGENT
+              debugLog += `Намерени пълни линкове: ${fileUrls.length}\n`;
               for (const fileUrl of fileUrls) {
                 try {
                   debugLog += `Теглене на: ${fileUrl}\n`;
+                  
+                  // Използваме fetch с пълна автентикация (GitHub токен), за да няма 404
                   const fileResponse = await fetch(fileUrl, {
                     headers: {
-                      'User-Agent': 'Mozilla/5.0'
+                      'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                      'User-Agent': 'GitHub-Actions-Bot'
                     },
                     redirect: 'follow'
                   });
@@ -83,12 +84,12 @@ jobs:
                   const arrayBuffer = await fileResponse.arrayBuffer();
                   const base64Data = Buffer.from(arrayBuffer).toString('base64');
                   
-                  debugLog += `Успешно! Байтове: ${arrayBuffer.byteLength}\n`;
+                  debugLog += `Успешно! Изтеглени байтове: ${arrayBuffer.byteLength}\n`;
 
                   let mimeType = "image/jpeg";
-                  if (fileUrl.endsWith('.png')) mimeType = "image/png";
-                  else if (fileUrl.endsWith('.webp')) mimeType = "image/webp";
-                  else if (fileUrl.endsWith('.pdf')) mimeType = "application/pdf";
+                  if (fileUrl.includes('.png')) mimeType = "image/png";
+                  else if (fileUrl.includes('.webp')) mimeType = "image/webp";
+                  else if (fileUrl.includes('.pdf')) mimeType = "application/pdf";
 
                   latestParts.push({
                     inlineData: {
@@ -101,7 +102,7 @@ jobs:
                 }
               }
             } else {
-              debugLog += "Няма линкове.\n";
+              debugLog += "Няма намерени линкове от този тип в текста.\n";
             }
 
             contents.push({ role: 'user', parts: latestParts });
