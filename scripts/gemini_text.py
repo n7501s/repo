@@ -18,10 +18,15 @@ def post_comment(message):
 
 
 def process_text_request(prompt):
-  api_key = os.environ.get("GEMINI_API_KEY")
+  # Търсим ключа в двете възможни системни променливи
+  api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+  
+  if not api_key:
+    post_comment("Грешка: API ключът за Gemini липсва в системите на GitHub Secrets!")
+    return
+
   genai.configure(api_key=api_key)
 
-  # Използваме Gemini Flash модела за бърз текстов отговор
   model = genai.GenerativeModel("gemini-1.5-flash")
 
   try:
