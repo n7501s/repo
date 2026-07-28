@@ -2,11 +2,10 @@ name: AI Router Bot (Test 3)
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened]
 
 jobs:
   router-job:
-    if: github.event.sender.type != 'Bot' && startsWith(github.event.issue.title, '[TEST3]')
     runs-on: ubuntu-latest
 
     steps:
@@ -24,8 +23,8 @@ jobs:
 
       - name: Run AI Router Script
         env:
-          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # <-- Сменихме от GEMINI_API_KEY на GOOGLE_API_KEY
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # Оставяме и двете за сигурност
+          GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
