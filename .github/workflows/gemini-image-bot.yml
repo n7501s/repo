@@ -44,36 +44,32 @@ jobs:
             const issue = await github.rest.issues.get({ owner, repo, issue_number });
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
 
-            // Събираме само предишната история като текстов контекст (без стари снимки/файлове), 
-            // за да знае ботът за какво си говорим, но да не се претоварва.
             const contents = [];
-            
             contents.push({ 
               role: "user", 
               parts: [{ text: `Контекст: заглавието на чата е "${issue.data.title}". Първо съобщение: ${issue.data.body || "Здравей"}` }] 
             });
 
-            // Добавяме предишните коментари само като текст
             for (const comment of comments.data) {
-              // Прескачаме последното (текущо) съобщение, защото ще го обработим отделно с файловете му
               if (comment.id === context.payload.comment?.id) continue;
-              
               const role = comment.user.type === 'Bot' ? 'model' : 'user';
               contents.push({ role: role, parts: [{ text: comment.body || "" }] });
             }
 
-            // Сега взимаме НАЙ-НОВОТО съобщение (това, което току-що е задействало екшъна)
             const latestBody = context.payload.comment ? context.payload.comment.body : (issue.data.body || "");
             const latestParts = [{ text: latestBody }];
 
-            // Търсим ВСИЧКИ линкове към файлове/снимки в това последно съобщение
-            // Поддържаме както картинки, така и документи (.pdf, .txt и др., ако GitHub ги е качил)
+            // Намираме всички линкове към файлове
             const fileUrls = latestBody.match(/https:\/\/(?:github\.com\/user-attachments\/assets\/|[a-zA-Z0-9-]+\.githubusercontent\.com\/[^\s)]+)/g);
 
+            let debugLog = "\n\n--- [ДЕБЪГ ЛОГ] ---\n";
+
             if (fileUrls) {
-              console.log(`Открити файлове/снимки в текущото съобщение: ${fileUrls.length}`);
+              debugLog += `Намерени линкове в съобщението: ${fileUrls.length}\n`;
+              let index = 1;
               for (const fileUrl of fileUrls) {
                 try {
+                  debugLog += `[${index}] Изтегляне на: ${fileUrl}\n`;
                   const fileResponse = await fetch(fileUrl, {
                     headers: {
                       'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`
@@ -85,12 +81,12 @@ jobs:
                   const fileBuffer = await fileResponse.arrayBuffer();
                   const base64Data = Buffer.from(fileBuffer).toString('base64');
                   
-                  // Определяме типа на файла по разширението в линка или го приемаме универсално
-                  let mimeType = "image/jpeg"; // по подразбиране
+                  debugLog += `[${index}] Успешно изтеглени байтове: ${fileBuffer.byteLength}\n`;
+
+                  let mimeType = "image/jpeg";
                   if (fileUrl.endsWith('.png')) mimeType = "image/png";
                   else if (fileUrl.endsWith('.webp')) mimeType = "image/webp";
                   else if (fileUrl.endsWith('.pdf')) mimeType = "application/pdf";
-                  else if (fileUrl.endsWith('.txt')) mimeType = "text/plain";
 
                   latestParts.push({
                     inlineData: {
@@ -99,22 +95,25 @@ jobs:
                     }
                   });
                 } catch (fileErr) {
+                  debugLog += `[${index}] ГРЕШКА при сваляне: ${fileErr.message}\n`;
                   console.error("Неуспешно изтегляне на файл:", fileErr);
                 }
+                index++;
               }
+            } else {
+              debugLog += "Няма намерени линкове за файлове в това съобщение.\n";
             }
 
-            // Добавяме най-новото съобщение с всички негови прикрепени файлове към опашката
             contents.push({ role: 'user', parts: latestParts });
 
             try {
-              // Използваме актуалния модел
               const response = await ai.models.generateContent({
                 model: 'gemini-3.5-flash-lite',
                 contents: contents,
               });
 
-              const botResponse = response.text;
+              // Добавяме и нашия дебаг лог към отговора на бота, за да го видим
+              const botResponse = response.text + debugLog;
 
               await github.rest.issues.createComment({
                 owner,
@@ -123,6 +122,6 @@ jobs:
                 body: botResponse
               });
             } catch (error) {
-              console.error("Грешка при комуникация с Gemini (Множество файлове):", error);
+              console.error("Грешка при комуникация с Gemini:", error);
               throw error;
             }
