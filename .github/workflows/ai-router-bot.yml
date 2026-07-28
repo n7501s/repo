@@ -3,6 +3,7 @@ name: AI Router Bot (Test 3)
 on:
   issues:
     types: [opened]
+  workflow_dispatch:  # <-- Добавяме възможност за ръчен старт с бутон
 
 jobs:
   router-job:
