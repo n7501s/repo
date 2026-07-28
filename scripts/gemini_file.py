@@ -1,38 +1,36 @@
 import os
 import google.generativeai as genai
-import requests
 
+def process_file(prompt):
+    """
+    Обработва заявки, свързани с файлове или изображения с Gemini.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("Грешка: GEMINI_API_KEY не е намерен в променливите на средата.")
 
-def post_comment(message):
-  token = os.environ.get("GITHUB_TOKEN")
-  repo = os.environ.get("GITHUB_REPOSITORY")
-  issue_number = os.environ.get("ISSUE_NUMBER")
+    # Конфигуриране на API ключа
+    genai.configure(api_key=api_key)
 
-  url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/comments"
-  headers = {
-      "Authorization": f"Bearer {token}",
-      "Accept": "application/vnd.github+json",
-  }
-  response = requests.post(url, json={"body": message}, headers=headers)
-  print(f"GitHub API Response: {response.status_code}")
+    # Запазваме твоя избран модел
+    model_name = "gemini-3.5-flash-lite"
 
+    try:
+        print(f"Извиквам Gemini File Module с модел: {model_name}")
+        
+        # Тук може да се добави логика за качване на истински файлове, 
+        # ако в бъдеще изтегляш прикачен файл от GitHub.
+        # Засега изпращаме заявката към модела с текст, указващ работа с файл.
+        
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(f"Обработи следната заявка свързана с файл: {prompt}")
 
-def process_file_request(content):
-  api_key = os.environ.get("GEMINI_API_KEY")
-  genai.configure(api_key=api_key)
+        if response and response.text:
+            return response.text
+        else:
+            return "Gemini File Module върна празен отговор."
 
-  # Тук слагаш твоята работна логика от втория файл за сваляне на файла и подаването му към Gemini
-  # За момента слагам примерна структура:
-  model = genai.GenerativeModel("gemini-3.5-flash-lite")
-
-  # Тук ще се обработва файла (ще надградим тази част с твоя код за сваляне от линк)
-  try:
-    response = model.generate_content([
-        "Моля анализирай приключения файл/картинка:",
-        content,
-    ])
-    answer = response.text
-  except Exception as e:
-    answer = f"Грешка при обработка на файл с Gemini: {str(e)}"
-
-  post_comment(answer)
+    except Exception as e:
+        error_msg = f"Грешка при връзка с Gemini (File): {str(e)}"
+        print(error_msg)
+        raise Exception(error_msg)
