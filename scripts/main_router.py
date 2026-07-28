@@ -2,7 +2,7 @@ import os
 import re
 import base64
 import requests
-import gemini_service  # Новият обединен модул
+import gemini_service  # Обединеният Gemini модул
 
 def get_issue_and_comments(repo, issue_number, token):
     """Изтегля основното съобщение и всички коментари от GitHub Issue."""
@@ -84,21 +84,15 @@ def main():
         issue_title = issue_data.get("title", "Без заглавие")
         issue_body = issue_data.get("body", "Здравей")
 
-        # Подготвяме масива contents за Gemini (със същата логика като работещия JS скрипт)
+        # Подготвяме масива contents за Gemini
         contents = []
         contents.append({
             "role": "user",
-            "parts": [{"text": f"Контекст на разговора: заглавието на това Issue е \"{issue_title}\". Първоначално запитване: {issue_body}"}]
+            "parts": [{"text": f'Контекст на разговора: заглавието на това Issue е "{issue_title}". Първоначално запитване: {issue_body}'}]
         })
 
         # Добавяме предишните коментари като история
         for comment in comments_data:
-            # Изключваме текущия коментар, ако се обработва в момента, за да не се дублира
-            if event_name == "issue_comment" and comment.get("body") == comment_body:
-                # Тук може да се ползва и ID проверка, но по съдържание също работи добре
-                pass 
-            
-            # Проверяваме дали коментарът е от бот или потребител
             user_type = comment.get("user", {}).get("type", "User")
             role = "model" if user_type == "Bot" else "user"
             contents.append({
@@ -114,17 +108,18 @@ def main():
         file_urls = re.findall(r'https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+', latest_body)
         
         debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
-        if fileUrls:
-            debug_log += `Намерени пълни линкове: {len(file_urls)}\n`
+        if file_urls:
+            debug_log += f"Намерени пълни линкове: {len(file_urls)}\n"
             for file_url in file_urls:
                 try:
                     print(f"Теглене на прикачен файл: {file_url}")
                     base64_data, mime_type = download_attachment_as_base64(file_url, token)
                     
-                    latest_parts.циях({
+                    # ПРАВИЛЕН СИНТАКСИС В PYTHON:
+                    latest_parts.append({
                         "inline_data": {
                             "data": base64_data,
-                            "mime_Type": mime_type
+                            "mime_type": mime_type
                         }
                     })
                     debug_log += f"Успешно добавен файл: {file_url}\n"
@@ -142,13 +137,13 @@ def main():
         # Извикваме Gemini сервиза
         ai_response = gemini_service.generate_response(contents)
         
-        # Добавяме дебъг лога към отговора (по желание, за да виждаш дали е хванало снимката)
+        # Добавяме дебъг лога към отговора
         final_output = ai_response + debug_log
 
         # Връщаме отговора в GitHub
         post_github_comment(repo, issue_number, token, final_output)
 
-    except Exception as e:
+    exceptException as e:
         error_message = f"Възникна грешка в модулната система:\n```\n{str(e)}\n```"
         print(error_message)
         post_github_comment(repo, issue_number, token, error_message)
