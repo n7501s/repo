@@ -1,4 +1,4 @@
-name: AI Router Bot
+name: AI Router Bot Dev
 
 on:
   issues:
