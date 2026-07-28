@@ -115,7 +115,6 @@ def main():
                     print(f"Теглене на прикачен файл: {file_url}")
                     base64_data, mime_type = download_attachment_as_base64(file_url, token)
                     
-                    # ПРАВИЛЕН СИНТАКСИС В PYTHON:
                     latest_parts.append({
                         "inline_data": {
                             "data": base64_data,
@@ -143,7 +142,7 @@ def main():
         # Връщаме отговора в GitHub
         post_github_comment(repo, issue_number, token, final_output)
 
-    exceptException as e:
+    except Exception as e:
         error_message = f"Възникна грешка в модулната система:\n```\n{str(e)}\n```"
         print(error_message)
         post_github_comment(repo, issue_number, token, error_message)
