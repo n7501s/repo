@@ -64,34 +64,41 @@ def post_github_comment(repo, issue_number, token, body):
     else:
         print(f"Грешка при публикуване в GitHub API: {response.status_code} - {response.text}")
 
-def update_readme_via_github_api(repo, action, items, target_section="Ideas & Roadmap"):
+def update_readme_via_github_api(repo, token, update_data):
     """
-    Обновява README.md в бранча 'dev' като поддържа добавяне и премахване на елементи.
+    Обновява README.md в бранча 'dev' на базата на JSON данни от Gemini.
+    Поддържа add_idea, add_implemented, add_rejected и remove_item.
     """
+    action = update_data.get("action")
+    items = update_data.get("items", [])
     path = "README.md"
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json"
+    }
+    
     try:
-        file_content = repo.get_contents(path, ref="dev")
-        decoded_content = file_content.decoded_content.decode("utf-8")
+        file_content = get_github_file_content(repo, path, "dev", token)
     except Exception as e:
         print(f"Грешка при четене на README.md: {e}")
         return
 
-    lines = decoded_content.splitlines()
+    lines = file_content.splitlines()
     new_lines = []
     
-    # Определяме заглавието на секцията спрямо действието
     section_headers = {
         "add_idea": "## 🚀 Ideas & Roadmap",
         "add_implemented": "## ✅ Current Features",
         "add_rejected": "## ❌ Archived / Rejected Ideas",
-        "remove_item": "## 🚀 Ideas & Roadmap" # По подразбиране чистим от Roadmap
+        "remove_item": "## 🚀 Ideas & Roadmap"
     }
     
     target_header = section_headers.get(action, "## 🚀 Ideas & Roadmap")
     is_in_target = False
     
-    # Ако действието е премахване, филтрираме съществуващите редове
-    if action == "remove_item" or action == "clean_section":
+    # Логика за премахване на елемент
+    if action == "remove_item":
         for line in lines:
             if line.startswith("## "):
                 is_in_target = (line.strip() == target_header)
@@ -99,39 +106,51 @@ def update_readme_via_github_api(repo, action, items, target_section="Ideas & Ro
                 continue
             
             if is_in_target:
-                # Проверяваме дали редът съдържа някой от елементите за премахване
                 should_remove = any(item.lower() in line.lower() for item in items)
                 if should_remove:
                     print(f"Премахвам от README: {line.strip()}")
-                    continue # Пропускаме го (изтриваме го)
+                    continue
             
             new_lines.append(line)
     else:
-        # Стандартна логика за добавяне (апендиране под заглавието)
+        # Логика за добавяне
         added = False
         for line in lines:
             new_lines.append(line)
             if line.strip() == target_header and not added:
-                # Добавяме новите елементи като списък
                 for item in items:
                     formatted_item = f"- {item}"
-                    if formatted_item not in decoded_content:
+                    if formatted_item not in file_content:
                         new_lines.append(formatted_item)
                 added = True
 
-    updated_content = "\nREADME.md\n" + "\n".join(new_lines) + "\n"
+    updated_content = "\n".join(new_lines) + "\n"
     
-    try:
-        repo.update_file(
-            path=path,
-            message=f"System Architect: update README via action {action}",
-            content="\n".join(new_lines),
-            sha=file_content.sha,
-            branch="dev"
-        )
+    # Взимаме SHA за обновяване чрез PyGithub или REST API
+    # Тъй като ползваш requests в целия скрипт, ето го чисто през requests:
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    # Първо взимаме актуалния sha на файла
+    get_res = requests.get(f"{url}?ref=dev", headers=headers)
+    if get_res.status_code != 200:
+        print(f"Грешка при взимане на SHA за README.md: {get_res.status_code}")
+        return
+    sha = get_res.json().get("sha")
+    
+    # Кодираме съдържанието в base64 за GitHub API
+    content_encoded = base64.b64encode(updated_content.encode('utf-8')).decode('utf-8')
+    
+    payload = {
+        "message": f"System Architect: update README via action {action}",
+        "content": content_encoded,
+        "sha": sha,
+        "branch": "dev"
+    }
+    
+    put_res = requests.put(url, json=payload, headers=headers)
+    if put_res.status_code in [200, 201]:
         print("README.md е успешно обновен!")
-    except Exception as e:
-        print(f"Грешка при обновяване на README.md: {e}")
+    else:
+        print(f"Грешка при обновяване на README.md: {put_res.status_code} - {put_res.text}")
 
 def get_github_file_content(repo, file_path, branch, token):
     """Изтегля съдържанието на файл от GitHub репозиторий по даден път и бранч."""
