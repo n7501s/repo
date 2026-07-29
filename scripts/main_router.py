@@ -4,6 +4,7 @@ import re
 import base64
 import requests
 import gemini_service  # Обединеният Gemini модул
+from bs4ounded import BeautifulSoup # Или просто с regex, за да не добавяме нови зависимости ако няма нужда
 
 def get_issue_and_comments(repo, issue_number, token):
     """Изтегля основното съобщение и всички коментари от GitHub Issue."""
@@ -135,6 +136,26 @@ def get_github_file_content(repo, file_path, branch, token):
     file_content = base64.b64decode(content_encoded).decode('utf-8')
     return file_content
 
+def fetch_web_page_content(url):
+    """Изтегля уеб страница и извлича текстовото съдържание (премахва HTML таговете)."""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (GitHub-Actions-Bot)'
+    }
+    response = requests.get(url, headers=headers, timeout=10)
+    if response.status_code != 200:
+        raise Exception(f"HTTP error! status: {response.status_code}")
+    
+    html_content = response.text
+    
+    # Премахваме скриптове, стилове и HTML тагове с регулярни изрази
+    clean_text = re.sub(r'<script.*?>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+    clean_text = re.sub(r'<style.*?>.*?</style>', '', clean_text, flags=re.DOTALL | re.IGNORECASE)
+    clean_text = re.sub(r'<[^>]+>', ' ', clean_text) # Махаме таговете
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip() # Събираме празни пространства
+    
+    # Връщаме първите 5000 символа, за да не препълваме контекста на Gemini
+    return clean_text[:5000]
+
 def main():
     repo = os.getenv("REPOSITORY")
     issue_number = os.getenv("ISSUE_NUMBER")
@@ -180,6 +201,9 @@ def main():
         file_urls = re.findall(r'https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+', latest_body)
         github_issue_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)', latest_body)
         github_file_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^/]+)\/(.+)', latest_body)
+        # Търсим външни уеб линкове (като изключваме github.com)
+        web_urls = re.findall(r'https?:\/\/(?!github\.com)[^\s]+', latest_body)
+
         
         # Инициализираме лога само веднъж тук!
         debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
@@ -232,6 +256,19 @@ def main():
                 except Exception as err:
                     debug_log += f"ГРЕШКА при четене на файл {file_path}: {str(err)}\n"
 
+                # 4. Обработка на външни уеб линкове (Новата функционалност)
+        if web_urls:
+            debug_log += f"Намерени външни линкове: {len(web_urls)}\n"
+            for web_url in web_urls:
+                try:
+                    page_text = fetch_web_page_content(web_url)
+                    latest_parts.append({
+                        "text": f"\n[Съдържание от уеб страница '{web_url}']: \n{page_text}\n"
+                    })
+                    debug_log += f"Успешно прочетена уеб страница: {web_url}\n"
+                except Exception as err:
+                    debug_log += f"ГРЕШКА при четене на уеб страница {web_url}: {str(err)}\n"
+                
         # Добавяме последното съобщение (с евентуалните файлове към него) в историята
         contents.append({
             "role": "user",
