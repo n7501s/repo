@@ -179,9 +179,9 @@ def main():
         # Търсим различни видове линкове в последния текст
         file_urls = re.findall(r'https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+', latest_body)
         github_issue_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)', latest_body)
-        # Търсим линкове към файлове в GitHub (напр. .../blob/dev/path/to/file)
         github_file_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^/]+)\/(.+)', latest_body)
         
+        # Инициализираме лога само веднъж тук!
         debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
         
         # 1. Обработка на прикачени изображения/файлове
@@ -204,7 +204,7 @@ def main():
         else:
             debug_log += "Няма намерени линкове към файлове.\n"
 
-        # 2. Обработка на линкове към стари Issue-та (Новата функционалност)
+        # 2. Обработка на линкове към стари Issue-та
         if github_issue_urls:
             debug_log += f"Намерени линкове към Issue-та: {len(github_issue_urls)}\n"
             for repo_path, issue_num in github_issue_urls:
@@ -232,7 +232,6 @@ def main():
                 except Exception as err:
                     debug_log += f"ГРЕШКА при четене на файл {file_path}: {str(err)}\n"
         
-        debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
         if file_urls:
             debug_log += f"Намерени пълни линкове: {len(file_urls)}\n"
             for file_url in file_urls:
