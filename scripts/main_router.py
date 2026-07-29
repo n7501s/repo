@@ -160,33 +160,32 @@ def main():
         latest_parts = [{"text": latest_body}]
 
         # Търсим различни видове линкове в последния текст
-        attachment_urls = re.findall(r'https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+', latest_body)
-        github_file_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/[^\s]+', latest_body)
+        file_urls = re.findall(r'https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+', latest_body)
         github_issue_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)', latest_body)
-        web_urls = re.findall(r'https?:\/\/(?!github\.com)[^\s]+', latest_body) # Външни сайтове
         
         debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
         
-        # 1. Обработка на прикачени изображения/файлове (както досега)
-        if attachment_urls:
-            debug_log += f"Намерени прикачени файлове: {len(attachment_urls)}\n"
-            for file_url in attachment_urls:
+        # 1. Обработка на прикачени изображения/файлове
+        if file_urls:
+            debug_log += f"Намерени пълни линкове: {len(file_urls)}\n"
+            for file_url in file_urls:
                 try:
+                    print(f"Теглене на прикачен файл: {file_url}")
                     base64_data, mime_type = download_attachment_as_base64(file_url, token)
+                    
                     latest_parts.append({
                         "inline_data": {
                             "data": base64_data,
                             "mime_type": mime_type
                         }
                     })
-                    debug_log += f"Успешно добавен прикачен файл: {file_url}\n"
+                    debug_log += f"Успешно добавен файл: {file_url}\n"
                 except Exception as err:
-                    debug_log += f"ГРЕШКА при прикачен файл: {str(err)}\n"
+                    debug_log += f"ГРЕШКА при теглене на файл: {str(err)}\n"
+        else:
+            debug_log += "Няма намерени линкове към файлове.\n"
 
-        # 2. Обработка на директни линкове към файлове в GitHub (четене на код)
-        # (Тук ще добавим функция за четене на файла през GitHub API)
-        
-        # 3. Обработка на линкове към стари Issue-та
+        # 2. Обработка на линкове към стари Issue-та (Новата функционалност)
         if github_issue_urls:
             debug_log += f"Намерени линкове към Issue-та: {len(github_issue_urls)}\n"
             for repo_path, issue_num in github_issue_urls:
