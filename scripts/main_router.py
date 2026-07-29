@@ -4,7 +4,6 @@ import re
 import base64
 import requests
 import gemini_service  # Обединеният Gemini модул
-from bs4ounded import BeautifulSoup # Или просто с regex, за да не добавяме нови зависимости ако няма нужда
 
 def get_issue_and_comments(repo, issue_number, token):
     """Изтегля основното съобщение и всички коментари от GitHub Issue."""
