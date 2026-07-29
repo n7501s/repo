@@ -64,38 +64,60 @@ def post_github_comment(repo, issue_number, token, body):
     else:
         print(f"Грешка при публикуване в GitHub API: {response.status_code} - {response.text}")
 
-def update_readme_full_via_github_api(repo, token, new_readme_content):
-    """Заменя изцяло съдържанието на README.md с новото, генерирано от агента."""
+def update_readme_via_github_api(repo, token, update_data):
+    """Тегли README.md, добавя новите идеи/задачи в съответната секция и я връща с commit/push в dev бранча."""
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json"
     }
     file_url = f"https://api.github.com/repos/{repo}/contents/README.md"
     
-    # 1. Взимаме SHA на текущия файл (изисква се от GitHub API за commit)
     res = requests.get(file_url, headers=headers)
     if res.status_code != 200:
         print(f"Грешка при четене на README.md: {res.status_code}")
         return
     
-    sha = res.json()["sha"]
+    file_info = res.json()
+    sha = file_info["sha"]
+    content_encoded = file_info["content"]
+    current_content = base64.b64decode(content_encoded).decode('utf-8')
 
-    # 2. Кодираме новия текст в base64
-    updated_content_encoded = base64.b64encode(new_readme_content.encode('utf-8')).decode('utf-8')
-    
-    commit_data = {
-        "message": "🤖 Auto-update README & Roadmap by Autonomous Agent",
-        "content": updated_content_encoded,
-        "sha": sha,
-        "branch": "dev"
-    }
-    
-    put_res = requests.put(file_url, json=commit_data, headers=headers)
-    if put_res.status_code in [200, 201]:
-        print("Успешно пълно обновяване на README.md в dev бранча!")
-    else:
-        print(f"Грешка при запис на README.md: {put_res.status_code} - {put_res.text}")
+    action = update_data.get("action")
+    items = update_data.get("items", []) # Очакваме списък от идеи/задачи (items)
 
+    target_header = ""
+    if action == "add_idea":
+        target_header = "## 🚀 Ideas & Roadmap"
+    elif action == "add_implemented":
+        target_header = "## ✅ Current Features"
+    elif action == "add_rejected":
+        target_header = "## ❌ Archived / Rejected Ideas"
+
+    if target_header and target_header in current_content and items:
+        # Генерираме новите редове за списъка
+        new_lines_str = ""
+        for item in items:
+            new_line = f"- {item}"
+            if new_line not in current_content:
+                new_lines_str += f"\n{new_line}"
+
+        if new_lines_str:
+            # Добавяме новите редове точно след заглавието
+            current_content = current_content.replace(target_header, f"{target_header}{new_lines_str}")
+            
+            updated_content_encoded = base64.b64encode(current_content.encode('utf-8')).decode('utf-8')
+            commit_data = {
+                "message": f"🤖 Auto-update README: Добавени нови идеи/задачи",
+                "content": updated_content_encoded,
+                "sha": sha,
+                "branch": "dev"
+            }
+            
+            put_res = requests.put(file_url, json=commit_data, headers=headers)
+            if put_res.status_code in [200, 201]:
+                print("Успешно авто-обновено README.md с множество идеи в dev бранча!")
+            else:
+                print(f"Грешка при запис на README.md: {put_res.status_code} - {put_res.text}")
 def main():
     repo = os.getenv("REPOSITORY")
     issue_number = os.getenv("ISSUE_NUMBER")
