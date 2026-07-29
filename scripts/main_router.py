@@ -231,25 +231,6 @@ def main():
                     debug_log += f"Успешно зареден файл: {file_path} (бранч: {branch})\n"
                 except Exception as err:
                     debug_log += f"ГРЕШКА при четене на файл {file_path}: {str(err)}\n"
-        
-        if file_urls:
-            debug_log += f"Намерени пълни линкове: {len(file_urls)}\n"
-            for file_url in file_urls:
-                try:
-                    print(f"Теглене на прикачен файл: {file_url}")
-                    base64_data, mime_type = download_attachment_as_base64(file_url, token)
-                    
-                    latest_parts.append({
-                        "inline_data": {
-                            "data": base64_data,
-                            "mime_type": mime_type
-                        }
-                    })
-                    debug_log += f"Успешно добавен файл: {file_url}\n"
-                except Exception as err:
-                    debug_log += f"ГРЕШКА при теглене на файл: {str(err)}\n"
-        else:
-            debug_log += "Няма намерени линкове към файлове.\n"
 
         # Добавяме последното съобщение (с евентуалните файлове към него) в историята
         contents.append({
