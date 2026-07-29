@@ -64,60 +64,74 @@ def post_github_comment(repo, issue_number, token, body):
     else:
         print(f"Грешка при публикуване в GitHub API: {response.status_code} - {response.text}")
 
-def update_readme_via_github_api(repo, token, update_data):
-    """Тегли README.md, добавя новите идеи/задачи в съответната секция и я връща с commit/push в dev бранча."""
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json"
-    }
-    file_url = f"https://api.github.com/repos/{repo}/contents/README.md"
-    
-    res = requests.get(file_url, headers=headers)
-    if res.status_code != 200:
-        print(f"Грешка при четене на README.md: {res.status_code}")
+def update_readme_via_github_api(repo, action, items, target_section="Ideas & Roadmap"):
+    """
+    Обновява README.md в бранча 'dev' като поддържа добавяне и премахване на елементи.
+    """
+    path = "README.md"
+    try:
+        file_content = repo.get_contents(path, ref="dev")
+        decoded_content = file_content.decoded_content.decode("utf-8")
+    except Exception as e:
+        print(f"Грешка при четене на README.md: {e}")
         return
+
+    lines = decoded_content.splitlines()
+    new_lines = []
     
-    file_info = res.json()
-    sha = file_info["sha"]
-    content_encoded = file_info["content"]
-    current_content = base64.b64decode(content_encoded).decode('utf-8')
-
-    action = update_data.get("action")
-    items = update_data.get("items", []) # Очакваме списък от идеи/задачи (items)
-
-    target_header = ""
-    if action == "add_idea":
-        target_header = "## 🚀 Ideas & Roadmap"
-    elif action == "add_implemented":
-        target_header = "## ✅ Current Features"
-    elif action == "add_rejected":
-        target_header = "## ❌ Archived / Rejected Ideas"
-
-    if target_header and target_header in current_content and items:
-        # Генерираме новите редове за списъка
-        new_lines_str = ""
-        for item in items:
-            new_line = f"- {item}"
-            if new_line not in current_content:
-                new_lines_str += f"\n{new_line}"
-
-        if new_lines_str:
-            # Добавяме новите редове точно след заглавието
-            current_content = current_content.replace(target_header, f"{target_header}{new_lines_str}")
+    # Определяме заглавието на секцията спрямо действието
+    section_headers = {
+        "add_idea": "## 🚀 Ideas & Roadmap",
+        "add_implemented": "## ✅ Current Features",
+        "add_rejected": "## ❌ Archived / Rejected Ideas",
+        "remove_item": "## 🚀 Ideas & Roadmap" # По подразбиране чистим от Roadmap
+    }
+    
+    target_header = section_headers.get(action, "## 🚀 Ideas & Roadmap")
+    is_in_target = False
+    
+    # Ако действието е премахване, филтрираме съществуващите редове
+    if action == "remove_item" or action == "clean_section":
+        for line in lines:
+            if line.startswith("## "):
+                is_in_target = (line.strip() == target_header)
+                new_lines.append(line)
+                continue
             
-            updated_content_encoded = base64.b64encode(current_content.encode('utf-8')).decode('utf-8')
-            commit_data = {
-                "message": f"🤖 Auto-update README: Добавени нови идеи/задачи",
-                "content": updated_content_encoded,
-                "sha": sha,
-                "branch": "dev"
-            }
+            if is_in_target:
+                # Проверяваме дали редът съдържа някой от елементите за премахване
+                should_remove = any(item.lower() in line.lower() for item in items)
+                if should_remove:
+                    print(f"Премахвам от README: {line.strip()}")
+                    continue # Пропускаме го (изтриваме го)
             
-            put_res = requests.put(file_url, json=commit_data, headers=headers)
-            if put_res.status_code in [200, 201]:
-                print("Успешно авто-обновено README.md с множество идеи в dev бранча!")
-            else:
-                print(f"Грешка при запис на README.md: {put_res.status_code} - {put_res.text}")
+            new_lines.append(line)
+    else:
+        # Стандартна логика за добавяне (апендиране под заглавието)
+        added = False
+        for line in lines:
+            new_lines.append(line)
+            if line.strip() == target_header and not added:
+                # Добавяме новите елементи като списък
+                for item in items:
+                    formatted_item = f"- {item}"
+                    if formatted_item not in decoded_content:
+                        new_lines.append(formatted_item)
+                added = True
+
+    updated_content = "\nREADME.md\n" + "\n".join(new_lines) + "\n"
+    
+    try:
+        repo.update_file(
+            path=path,
+            message=f"System Architect: update README via action {action}",
+            content="\n".join(new_lines),
+            sha=file_content.sha,
+            branch="dev"
+        )
+        print("README.md е успешно обновен!")
+    except Exception as e:
+        print(f"Грешка при обновяване на README.md: {e}")
 
 def get_github_file_content(repo, file_path, branch, token):
     """Изтегля съдържанието на файл от GitHub репозиторий по даден път и бранч."""
