@@ -118,6 +118,23 @@ def update_readme_via_github_api(repo, token, update_data):
                 print("Успешно авто-обновено README.md с множество идеи в dev бранча!")
             else:
                 print(f"Грешка при запис на README.md: {put_res.status_code} - {put_res.text}")
+
+def get_github_file_content(repo, file_path, branch, token):
+    """Изтегля съдържанието на файл от GitHub репозиторий по даден път и бранч."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json"
+    }
+    url = f"https://api.github.com/repos/{repo}/contents/{file_path}?ref={branch}"
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        raise Exception(f"Грешка при четене на файл {file_path}: {response.status_code}")
+    
+    file_info = response.json()
+    content_encoded = file_info["content"]
+    file_content = base64.b64decode(content_encoded).decode('utf-8')
+    return file_content
+
 def main():
     repo = os.getenv("REPOSITORY")
     issue_number = os.getenv("ISSUE_NUMBER")
@@ -162,6 +179,8 @@ def main():
         # Търсим различни видове линкове в последния текст
         file_urls = re.findall(r'https:\/\/github\.com\/user-attachments\/assets\/[a-zA-Z0-9-]+', latest_body)
         github_issue_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)', latest_body)
+        # Търсим линкове към файлове в GitHub (напр. .../blob/dev/path/to/file)
+        github_file_urls = re.findall(r'https:\/\/github\.com\/([^/]+\/[^/]+)\/blob\/([^/]+)\/(.+)', latest_body)
         
         debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
         
@@ -199,6 +218,19 @@ def main():
                     debug_log += f"Успешно зареден контекст от Issue #{issue_num}\n"
                 except Exception as err:
                     debug_log += f"ГРЕШКА при четене на Issue #{issue_num}: {str(err)}\n"
+
+        # 3. Обработка на линкове към файлове в GitHub
+        if github_file_urls:
+            debug_log += f"Намерени линкове към GitHub файлове: {len(github_file_urls)}\n"
+            for repo_path, branch, file_path in github_file_urls:
+                try:
+                    file_content = get_github_file_content(repo_path, file_path, branch, token)
+                    latest_parts.append({
+                        "text": f"\n[Съдържание на файл '{file_path}' от бранч '{branch}']: \n```python\n{file_content}\n```\n"
+                    })
+                    debug_log += f"Успешно зареден файл: {file_path} (бранч: {branch})\n"
+                except Exception as err:
+                    debug_log += f"ГРЕШКА при четене на файл {file_path}: {str(err)}\n"
         
         debug_log = "\n\n--- [ДЕБЪГ ЛОГ] ---\n"
         if file_urls:
