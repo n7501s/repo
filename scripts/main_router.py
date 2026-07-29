@@ -97,19 +97,18 @@ def update_readme_via_github_api(repo, token, update_data):
     target_header = section_headers.get(action, "## 🚀 Ideas & Roadmap")
     is_in_target = False
     
-    # Логика за премахване на елемент
+    # Логика за премахване на елемент (премахва съвпадението независимо в коя секция е)
     if action == "remove_item":
         for line in lines:
             if line.startswith("## "):
-                is_in_target = (line.strip() == target_header)
                 new_lines.append(line)
                 continue
             
-            if is_in_target:
-                should_remove = any(item.lower() in line.lower() for item in items)
-                if should_remove:
-                    print(f"Премахвам от README: {line.strip()}")
-                    continue
+            # Търси и трие съвпадението навсякъде в README-то (и в Ideas, и в Rejected)
+            should_remove = any(item.lower() in line.lower() for item in items)
+            if should_remove:
+                print(f"Премахвам от README: {line.strip()}")
+                continue
             
             new_lines.append(line)
     else:
