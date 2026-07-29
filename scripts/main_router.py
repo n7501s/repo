@@ -191,18 +191,19 @@ def main():
         # Извикваме Gemini сервиза
         ai_response = gemini_service.generate_response(contents)
         
-        # Търсим дали Gemini е решил да обнови изцяло README.md
-        readme_update_match = re.search(r'\[README_FULL_UPDATE\](.*?)\[/README_FULL_UPDATE\]', ai_response, re.DOTALL)
+        # Търсим дали Gemini е решил да обнови README с [README_UPDATE]
+        readme_update_match = re.search(r'\[README_UPDATE\](.*?)\[/README_UPDATE\]', ai_response, dak_flags := re.DOTALL)
         if readme_update_match:
             try:
-                new_readme_content = readme_update_match.group(1).strip()
-                print("Засечена пълна актуализация на README от агента.")
-                update_readme_full_via_github_api(repo, token, new_readme_content)
+                json_str = readme_update_match.group(1).strip()
+                update_data = json.loads(json_str)
+                print(f"Засечена заявка за README ъпдейт с действие: {update_data.get('action')}")
+                update_readme_via_github_api(repo, token, update_data)
             except Exception as ex:
-                print(f"Грешка при пълния README ъпдейт: {str(ex)}")
+                print(f"Грешка при обработка на README_UPDATE: {str(ex)}")
             
-            # Премахваме скрития блок от коментара в Issue-то
-            ai_response = re.sub(r'\[README_FULL_UPDATE\].*?\[/README_FULL_UPDATE\]', '', ai_response, flags=re.DOTALL).strip()
+            # Премахваме скрития блок от коментара, за да не се показва в GitHub Issue-то
+            ai_response = re.sub(r'\[README_UPDATE\].*?\[/README_UPDATE\]', '', ai_response, flags=re.DOTALL).strip()
 
         # Добавяме дебъг лога към отговора
         final_output = ai_response + debug_log
