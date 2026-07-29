@@ -64,53 +64,37 @@ def post_github_comment(repo, issue_number, token, body):
     else:
         print(f"Грешка при публикуване в GitHub API: {response.status_code} - {response.text}")
 
-def update_readme_via_github_api(repo, token, update_data):
-    """Тегли README.md, добавя новата идея/задача в съответната секция и я връща с commit/push в dev бранча."""
+def update_readme_full_via_github_api(repo, token, new_readme_content):
+    """Заменя изцяло съдържанието на README.md с новото, генерирано от агента."""
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json"
     }
     file_url = f"https://api.github.com/repos/{repo}/contents/README.md"
     
+    # 1. Взимаме SHA на текущия файл (изисква се от GitHub API за commit)
     res = requests.get(file_url, headers=headers)
     if res.status_code != 200:
         print(f"Грешка при четене на README.md: {res.status_code}")
         return
     
-    file_info = res.json()
-    sha = file_info["sha"]
-    content_encoded = file_info["content"]
-    current_content = base64.b64decode(content_encoded).decode('utf-8')
+    sha = res.json()["sha"]
 
-    action = update_data.get("action")
-    text = update_data.get("text")
-
-    target_header = ""
-    if action == "add_idea":
-        target_header = "## 🚀 Ideas & Roadmap"
-    elif action == "add_implemented":
-        target_header = "## ✅ Current Features"
-    elif action == "add_rejected":
-        target_header = "## ❌ Archived / Rejected Ideas"
-
-    if target_header and target_header in current_content:
-        new_line = f"- {text}"
-        if new_line not in current_content:
-            current_content = current_content.replace(target_header, f"{target_header}\n{new_line}")
-            
-            updated_content_encoded = base64.b64encode(current_content.encode('utf-8')).decode('utf-8')
-            commit_data = {
-                "message": f"🤖 Auto-update README: {text}",
-                "content": updated_content_encoded,
-                "sha": sha,
-                "branch": "dev"
-            }
-            
-            put_res = requests.put(file_url, json=commit_data, headers=headers)
-            if put_res.status_code in [200, 201]:
-                print("Успешно авто-обновено README.md в dev бранча!")
-            else:
-                print(f"Грешка при запис на README.md: {put_res.status_code} - {put_res.text}")
+    # 2. Кодираме новия текст в base64
+    updated_content_encoded = base64.b64encode(new_readme_content.encode('utf-8')).decode('utf-8')
+    
+    commit_data = {
+        "message": "🤖 Auto-update README & Roadmap by Autonomous Agent",
+        "content": updated_content_encoded,
+        "sha": sha,
+        "branch": "dev"
+    }
+    
+    put_res = requests.put(file_url, json=commit_data, headers=headers)
+    if put_res.status_code in [200, 201]:
+        print("Успешно пълно обновяване на README.md в dev бранча!")
+    else:
+        print(f"Грешка при запис на README.md: {put_res.status_code} - {put_res.text}")
 
 def main():
     repo = os.getenv("REPOSITORY")
@@ -185,19 +169,18 @@ def main():
         # Извикваме Gemini сервиза
         ai_response = gemini_service.generate_response(contents)
         
-        # Търсим дали Gemini е решил да обнови README.md
-        readme_update_match = re.search(r'\[README_UPDATE\](.*?)\[/README_UPDATE\]', ai_response, re.DOTALL)
+        # Търсим дали Gemini е решил да обнови изцяло README.md
+        readme_update_match = re.search(r'\[README_FULL_UPDATE\](.*?)\[/README_FULL_UPDATE\]', ai_response, re.DOTALL)
         if readme_update_match:
             try:
-                json_str = readme_update_match.group(1).strip()
-                update_data = json.loads(json_str)
-                print(f"Засечена заявка за обновяване на README: {update_data}")
-                update_readme_via_github_api(repo, token, update_data)
+                new_readme_content = readme_update_match.group(1).strip()
+                print("Засечена пълна актуализация на README от агента.")
+                update_readme_full_via_github_api(repo, token, new_readme_content)
             except Exception as ex:
-                print(f"Грешка при обработка на README ъпдейт: {str(ex)}")
+                print(f"Грешка при пълния README ъпдейт: {str(ex)}")
             
             # Премахваме скрития блок от коментара в Issue-то
-            ai_response = re.sub(r'\[README_UPDATE\].*?\[/README_UPDATE\]', '', ai_response, flags=re.DOTALL).strip()
+            ai_response = re.sub(r'\[README_FULL_UPDATE\].*?\[/README_FULL_UPDATE\]', '', ai_response, flags=re.DOTALL).strip()
 
         # Добавяме дебъг лога към отговора
         final_output = ai_response + debug_log
