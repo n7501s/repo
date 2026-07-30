@@ -195,7 +195,7 @@ def process_chatgpt_export_file(file_content: str):
     print(f"Общ брой намерени диалози: {len(parsed_data)}")
     
     chunks = chunk_conversation_history(parsed_data)
-    print(разделено на {len(chunks)} парчета за обработка.)
+    print(f"Разделено на {len(chunks)} парчета за обработка.")
     
     # Тук в бъдеще можем да подаваме всяко парче към Gemini за резюме или индексиране
     return chunks
