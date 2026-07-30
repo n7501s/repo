@@ -200,6 +200,28 @@ def process_chatgpt_export_file(file_content: str):
     # Тук в бъдеще можем да подаваме всяко парче към Gemini за резюме или индексиране
     return chunks
 
+from scripts.chatgpt_parser import parse_chatgpt_markdown, chunk_conversation_history
+
+def process_large_chatgpt_history(file_path: str):
+    """
+    Чете големия ChatGPT файл от репозиторито, парсира го 
+    и го разделя на безопасни парчета за обработка.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        parsed_data = parse_chatgpt_markdown(content)
+        print(f"Успешно парсирани {len(parsed_data)} диалога от ChatGPT историята.")
+        
+        chunks = chunk_conversation_history(parsed_data, max_chunk_size=4000)
+        print(f"Файлът е разделен на {len(chunks)} безопасни парчета.")
+        
+        # Тук за в бъдеще всяко парче може да се праща към Gemini за извличане на важни идеи
+        return chunks
+    except Exception as e:
+        print(f"Грешка при обработка на ChatGPT историята: {e}")
+        return []
 
 def main():
     repo = os.getenv("REPOSITORY")
