@@ -199,8 +199,6 @@ def process_chatgpt_export_file(file_content: str):
     # Тук в бъдеще можем да подаваме всяко парче към Gemini за резюме или индексиране
     return chunks
 
-from scripts.chatgpt_parser import parse_chatgpt_markdown, chunk_conversation_history
-
 def process_large_chatgpt_history(file_path: str):
     """
     Чете големия ChatGPT файл от репозиторито, парсира го 
