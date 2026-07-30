@@ -189,6 +189,18 @@ def fetch_web_page_content(url):
     # Връщаме първите 5000 символа, за да не препълваме контекста на Gemini
     return clean_text[:5000]
 
+def process_chatgpt_export_file(file_content: str):
+    print("Парсиране на ChatGPT експорт...")
+    parsed_data = parse_chatgpt_markdown(file_content)
+    print общ брой намерени диалози: len(parsed_data)
+    
+    chunks = chunk_conversation_history(parsed_data)
+    print(разделено на {len(chunks)} парчета за обработка.)
+    
+    # Тук в бъдеще можем да подаваме всяко парче към Gemini за резюме или индексиране
+    return chunks
+
+
 def main():
     repo = os.getenv("REPOSITORY")
     issue_number = os.getenv("ISSUE_NUMBER")
