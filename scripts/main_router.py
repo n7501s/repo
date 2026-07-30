@@ -220,6 +220,34 @@ def process_large_chatgpt_history(file_path: str):
         print(f"Грешка при обработка на ChatGPT историята: {e}")
         return []
 
+def analyze_chatgpt_chunks_with_gemini(chunks):
+    """
+    Обхожда парчетата от историята на ChatGPT и пита Gemini за ключови идеи и решения.
+    """
+    extracted_insights = []
+    
+    print(f"Стартиране на анализ на {len(chunks)} парчета с Gemini...")
+    
+    for i, chunk in enumerate(chunks):
+        print(f"Анализиране на парче {i+1} от {len(chunks)}...")
+        
+        prompt = (
+            "Ти си системен архитект. Анализирай следния откъс от история на чат с разработчик "
+            "и извлечи накратко (ако има такива) нови идеи за подобрения, Roadmap точки или завършени функции. "
+            "Върни ги в кратки точки. Ако няма нищо съществено в този откъс, отговори само с 'НЯМА'.\n\n"
+            f"ОТКЪС:\n{chunk}"
+        )
+        
+        try:
+            # Използваме съществуващата функция за извикване на Gemini от gemini_service
+            response = gemini_service.call_gemini_api(prompt)
+            if response and "НЯМА" not in response.upper():
+                extracted_insights.append(response)
+        except Exception as e:
+            print(f"Грешка при анализ на парче {i+1}: {e}")
+            
+    return extracted_insights
+
 def main():
     repo = os.getenv("REPOSITORY")
     issue_number = os.getenv("ISSUE_NUMBER")
