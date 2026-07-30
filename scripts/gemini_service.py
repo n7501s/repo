@@ -55,3 +55,9 @@ def generate_response(contents_history):
         error_msg = f"Грешка при връзка с Gemini: {str(e)}"
         print(error_msg)
         raise Exception(error_msg)
+
+def call_gemini_api(contents_history):
+    """
+    Съвместим псевдоним (alias) за main_router.py, който очаква call_gemini_api.
+    """
+    return generate_response(contents_history)
