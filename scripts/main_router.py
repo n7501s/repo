@@ -4,6 +4,8 @@ import re
 import base64
 import requests
 import gemini_service  # Обединеният Gemini модул
+from scripts.chatgpt_parser import parse_chatgpt_markdown, chunk_conversation_history
+
 
 def get_issue_and_comments(repo, issue_number, token):
     """Изтегля основното съобщение и всички коментари от GitHub Issue."""
