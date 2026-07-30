@@ -192,7 +192,7 @@ def fetch_web_page_content(url):
 def process_chatgpt_export_file(file_content: str):
     print("Парсиране на ChatGPT експорт...")
     parsed_data = parse_chatgpt_markdown(file_content)
-    print общ брой намерени диалози: len(parsed_data)
+    print(f"Общ брой намерени диалози: {len(parsed_data)}")
     
     chunks = chunk_conversation_history(parsed_data)
     print(разделено на {len(chunks)} парчета за обработка.)
