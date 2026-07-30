@@ -348,6 +348,20 @@ def main():
                 except Exception as err:
                     debug_log += f"ГРЕШКА при четене на файл {file_path}: {str(err)}\n"
 
+        # Специална обработка, ако в разговора се спомене ChatGPT историята
+        if "chatgpt_history.md" in latest_body.lower() or "история" in latest_body.lower():
+            try:
+                print("Засечено заявка за анализ на ChatGPT историята...")
+                chunks = process_large_chatgpt_history("data/chatgpt_history.md")
+                if chunks:
+                    insights = analyze_chatgpt_chunks_with_gemini(chunks)
+                    if insights:
+                        insight_text = "\n\n**Извлечени идеи от ChatGPT историята:**\n" + "\n".join(insights)
+                        latest_parts.append({"text": insight_text})
+                        debug_log += f"Успешно анализирани и извлечени идеи от {len(chunks)} парчета.\n"
+            except Exception as hist_err:
+                debug_log += f"ГРЕШКА при анализ на ChatGPT историята: {str(hist_err)}\n"
+
                 # 4. Обработка на външни уеб линкове (Новата функционалност)
         if web_urls:
             debug_log += f"Намерени външни линкове: {len(web_urls)}\n"
