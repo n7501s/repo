@@ -37,6 +37,13 @@ def main():
         ai_response = ai_provider.generate_response(f"Analyze issue #{issue_number} with {len(chunks)} parsed history chunks.")
         print(ai_response)
         
+        # 6. Публикуване на отговора обратно в GitHub Issue
+        success = post_github_comment(issue_number, f"🤖 **Autonomous Bot Response:**\n\n{ai_response}")
+        if success:
+            print("Successfully posted response to GitHub Issue.")
+        else:
+            print("Failed to post response to GitHub Issue.")
+        
         print("Final integration completed successfully. Full automation achieved!")
         
     except Exception as e:
