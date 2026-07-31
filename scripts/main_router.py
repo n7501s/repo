@@ -239,13 +239,19 @@ def process_large_chatgpt_history(file_path: str):
 
 def analyze_chatgpt_chunks_with_gemini(chunks):
     """
-    Обхожда парчетата от историята на ChatGPT и пита Gemini за ключови идеи и решения.
+    Обхожда парчетата от историята на ChatGPT с поддръжка на запазване на състоянието (Resume on Failure).
+    Предотвратява загуба на прогрес при timeout в GitHub Actions.
     """
-    extracted_insights = []
+    state = load_progress()
+    completed_chunks = state.get("completed_chunks", [])
+    extracted_insights = state.get("insights", [])
     
-    print(f"Стартиране на анализ на {len(chunks)} парчета с Gemini...")
+    print(f"Стартиране на анализ с Gemini. Общо парчета: {len(chunks)}. Вече обработени: {len(completed_chunks)}.")
     
     for i, chunk in enumerate(chunks):
+        if i in completed_chunks:
+            continue # Пропускаме вече обработените парчета
+            
         print(f"Анализиране на парче {i+1} от {len(chunks)}...")
         
         prompt = (
@@ -256,12 +262,18 @@ def analyze_chatgpt_chunks_with_gemini(chunks):
         )
         
         try:
-            # Използваме съществуващата функция за извикване на Gemini от gemini_service
             response = gemini_service.call_gemini_api(prompt)
             if response and "НЯМА" not in response.upper():
                 extracted_insights.append(response)
+            
+            # Записваме прогреса веднага след всяко успешно парче
+            completed_chunks.append(i)
+            save_progress(completed_chunks, extracted_insights)
+            
         except Exception as e:
             print(f"Грешка при анализ на парче {i+1}: {e}")
+            print("Запазваме текущия прогрес и прекъсваме безопасно, за да продължим при следващ тригер.")
+            break # Прекъсваме цикъла безопасно, за да не гръмне целия Action
             
     return extracted_insights
 
