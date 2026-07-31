@@ -5,6 +5,23 @@ import base64
 import requests
 import gemini_service  # Обединеният Gemini модул
 from chatgpt_parser import parse_chatgpt_markdown, chunk_conversation_history  # <--- Ето тук махаме "scripts."
+STATE_FILE = ".chatgpt_progress.json"
+
+def load_progress():
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"completed_chunks": [], "insights": []}
+    return {"completed_chunks": [], "insights": []}
+
+def save_progress(completed_chunks, insights):
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"completed_chunks": completed_chunks, "insights": insights}, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Грешка при запис на прогреса: {e}")
 
 def get_issue_and_comments(repo, issue_number, token):
     """Изтегля основното съобщение и всички коментари от GitHub Issue."""
