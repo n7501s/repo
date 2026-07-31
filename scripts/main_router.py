@@ -6,9 +6,10 @@ from github_client import (
     update_readme_via_github_api
 )
 from chatgpt_analyzer import load_progress, save_progress
+from model_provider import DynamicModelProvider
 
 def main():
-    print("Starting Main Router (Modular Architecture)...")
+    print("Starting Main Router (Autonomous Architecture)...")
     issue_number = os.getenv("ISSUE_NUMBER")
     if not issue_number:
         print("No ISSUE_NUMBER provided in environment.")
@@ -21,8 +22,15 @@ def main():
         # Зареждане на състоянието
         state = load_progress()
         
-        # Тук ще надградим динамичния механизъм за моделите в следващата стъпка
-        print("Modular separation step completed successfully.")
+        # Инициализиране на автономния доставчик на модели (Без ръчни ключове)
+        ai_provider = DynamicModelProvider()
+        
+        # Тест на автономното генериране
+        test_prompt = f"Analyze issue #{issue_number} and determine next steps."
+        ai_response = ai_provider.generate_response(test_prompt)
+        print(ai_response)
+        
+        print("Step 2 completed: Dynamic model provisioning implemented successfully.")
         
     except Exception as e:
         print(f"Critical error in main router execution: {e}")
